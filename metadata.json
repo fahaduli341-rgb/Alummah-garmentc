@@ -1,0 +1,6 @@
+{
+  "name": "AL UMMAH GARMENTS - Modern Fashion Store",
+  "description": "Premium garments e-commerce store for AL UMMAH GARMENTS featuring modern and modest attire, seamless shopping, WhatsApp ordering, order tracking, and an integrated admin management dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
