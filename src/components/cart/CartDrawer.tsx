@@ -150,8 +150,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onNavigate }) => {
               cart.map((item, index) => (
                 <div key={`${item.product.id}-${item.selectedSize}-${item.selectedColor.name}`} className="pt-4 first:pt-0 flex gap-4">
                   <img
-                    src={item.product.images[0]}
+                    src={item.product.images[0]?.replace('/src/assets/images/', '/images/')}
                     alt={item.product.name}
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                    }}
                     referrerPolicy="no-referrer"
                     className="w-20 h-24 object-cover rounded-md bg-stone-100 shrink-0 border border-stone-200"
                   />

@@ -94,7 +94,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         color: item.selectedColor.name,
       }));
 
-      const newOrder = StorageService.createOrder({
+      const newOrder = await StorageService.createOrder({
         status: 'pending',
         items: orderItems,
         customer: {
@@ -491,8 +491,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               {cart.map((item, idx) => (
                 <div key={idx} className="pt-3 first:pt-0 flex gap-3 text-xs">
                   <img
-                    src={item.product.images[0]}
+                    src={item.product.images[0]?.replace('/src/assets/images/', '/images/')}
                     alt={item.product.name}
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                    }}
                     referrerPolicy="no-referrer"
                     className="w-14 h-18 object-cover rounded bg-stone-100 border border-stone-200 shrink-0"
                   />

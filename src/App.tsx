@@ -48,6 +48,20 @@ function StoreApp() {
   useEffect(() => {
     setProducts(StorageService.getProducts());
     setCategories(StorageService.getCategories());
+
+    // Subscribe to live Firestore updates
+    const unsubscribe = StorageService.subscribeToLiveUpdates({
+      onProducts: (liveProducts) => {
+        setProducts(liveProducts);
+      },
+      onCategories: (liveCategories) => {
+        setCategories(liveCategories);
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [currentPath]);
 
   // Admin View

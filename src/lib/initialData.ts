@@ -18,7 +18,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   adminPassword: 'admin',
 
   // Hero Banner Picture & Titles
-  heroImage: '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+  heroImage: '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
   heroBadge: 'ড্রপ-শোল্ডার এডিশন',
   heroTitle: 'সবর (Sabr) ও তাওয়াক্কুল (Tawakkul) সিরিজ',
   heroMainHeading: 'মার্জিত ইসলামিক ক্যালিগ্রাফি ও খাঁটি কটনের টি-শার্ট।',
@@ -39,7 +39,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     name: 'Islamic Calligraphy Tees',
     slug: 'islamic-calligraphy',
     description: 'সবর (Sabr), তাওয়াক্কুল (Tawakkul) ও অর্থবহ ইসলামিক ক্যালিগ্রাফি প্রিন্টেড প্রিমিয়াম টি-শার্ট।',
-    image: '/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg',
+    image: '/images/tshirt_sabr_calligraphy_1791712281050.jpg',
     productCount: 2,
   },
   {
@@ -47,7 +47,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     name: 'Heavyweight Oversized',
     slug: 'heavyweight-oversized',
     description: '২২০-২৪০ জিএসএম প্রিমিয়াম ১০০% কম্বড কটন হেভিওয়েট ড্রপ-শোল্ডার টি-শার্ট।',
-    image: '/src/assets/images/tshirt_tawakkul_green_1791712291944.jpg',
+    image: '/images/tshirt_tawakkul_green_1791712291944.jpg',
     productCount: 2,
   },
   {
@@ -55,7 +55,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     name: 'Minimalist Signature',
     slug: 'minimalist-signature',
     description: 'সহজ-সরল ইসলামিক জ্যামিতিক নকশা ও আল-উম্মাহ সিগনেচার মিনিমাল ড্রপ-শোল্ডার।',
-    image: '/src/assets/images/tshirt_al_ummah_cream_1791712303018.jpg',
+    image: '/images/tshirt_al_ummah_cream_1791712303018.jpg',
     productCount: 2,
   },
 ];
@@ -74,8 +74,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     gsm: '230 GSM',
     fit: 'Oversized Drop-Shoulder',
     images: [
-      '/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg',
-      '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+      '/images/tshirt_sabr_calligraphy_1791712281050.jpg',
+      '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
     ],
     sizes: ['M (Chest 40")', 'L (Chest 42")', 'XL (Chest 44")', 'XXL (Chest 46")'],
     colors: [
@@ -109,8 +109,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     gsm: '235 GSM',
     fit: 'Oversized Drop-Shoulder',
     images: [
-      '/src/assets/images/tshirt_tawakkul_green_1791712291944.jpg',
-      '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+      '/images/tshirt_tawakkul_green_1791712291944.jpg',
+      '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
     ],
     sizes: ['M (Chest 40")', 'L (Chest 42")', 'XL (Chest 44")', 'XXL (Chest 46")'],
     colors: [
@@ -140,8 +140,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     gsm: '225 GSM',
     fit: 'Oversized Drop-Shoulder',
     images: [
-      '/src/assets/images/tshirt_al_ummah_cream_1791712303018.jpg',
-      '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+      '/images/tshirt_al_ummah_cream_1791712303018.jpg',
+      '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
     ],
     sizes: ['M (Chest 40")', 'L (Chest 42")', 'XL (Chest 44")', 'XXL (Chest 46")'],
     colors: [

@@ -75,8 +75,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         <div className="lg:col-span-7 space-y-4">
           <div className="aspect-[4/5] rounded-xl overflow-hidden bg-stone-100 border border-stone-200 shadow-xs relative">
             <img
-              src={activeImage}
+              src={activeImage?.replace('/src/assets/images/', '/images/')}
               alt={product.name}
+              onError={(e) => {
+                e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+              }}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
@@ -99,8 +102,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   }`}
                 >
                   <img
-                    src={img}
+                    src={img?.replace('/src/assets/images/', '/images/')}
                     alt={`Thumbnail ${idx + 1}`}
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                    }}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                   />

@@ -98,8 +98,11 @@ export const HomePage: React.FC<HomePageProps> = ({
           <div className="lg:col-span-5 relative">
             <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-emerald-950 aspect-[4/5] bg-stone-900">
               <img
-                src={settings.heroImage || '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg'}
+                src={settings.heroImage?.replace('/src/assets/images/', '/images/') || '/images/hero_islamic_tshirt_banner_1791712348157.jpg'}
                 alt="Al Ummah Islamic T-Shirts Campaign"
+                onError={(e) => {
+                  e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=1200&auto=format&fit=crop&q=80';
+                }}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
@@ -190,8 +193,11 @@ export const HomePage: React.FC<HomePageProps> = ({
               className="group relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-900 cursor-pointer shadow-sm hover:shadow-lg transition-all"
             >
               <img
-                src={cat.image}
+                src={cat.image?.replace('/src/assets/images/', '/images/')}
                 alt={cat.name}
+                onError={(e) => {
+                  e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                }}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
@@ -281,8 +287,11 @@ export const HomePage: React.FC<HomePageProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-stone-200 shadow-lg">
             <img
-              src="/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg"
+              src="/images/tshirt_sabr_calligraphy_1791712281050.jpg"
               alt="Al Ummah Fabric Quality"
+              onError={(e) => {
+                e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+              }}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />

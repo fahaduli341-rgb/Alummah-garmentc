@@ -190,8 +190,11 @@ export const OrderTrackingPage: React.FC<OrderTrackingPageProps> = ({ initialOrd
                     <div key={idx} className="py-3 flex items-center justify-between gap-4 text-xs">
                       <div className="flex items-center gap-3">
                         <img
-                          src={item.productImage}
+                          src={item.productImage?.replace('/src/assets/images/', '/images/')}
                           alt={item.productName}
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                          }}
                           referrerPolicy="no-referrer"
                           className="w-12 h-14 object-cover rounded bg-stone-100 border border-stone-200"
                         />

@@ -32,16 +32,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
       {/* Product Image */}
       <div className="relative aspect-[3/4] bg-stone-100 overflow-hidden">
         <img
-          src={product.images[0]}
+          src={product.images[0]?.replace('/src/assets/images/', '/images/')}
           alt={product.name}
+          onError={(e) => {
+            e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+          }}
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
 
         {product.images[1] && (
           <img
-            src={product.images[1]}
+            src={product.images[1]?.replace('/src/assets/images/', '/images/')}
             alt={`${product.name} view`}
+            onError={(e) => {
+              e.currentTarget.src = 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=800&auto=format&fit=crop&q=80';
+            }}
             referrerPolicy="no-referrer"
             className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-500"
           />

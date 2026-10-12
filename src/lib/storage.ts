@@ -1,7 +1,7 @@
 import { Product, Category, Order, StoreSettings, Coupon, CartItem, OrderStatus } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_COUPONS, INITIAL_PRODUCTS, INITIAL_SETTINGS } from './initialData';
 import { db } from './firebase';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDoc, getDocs, collection, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'alummah_tshirts_products',
@@ -14,12 +14,13 @@ const STORAGE_KEYS = {
   ADMIN_PWD: 'alummah_admin_custom_pwd',
 };
 
-// Safe storage reader
+// Safe storage reader with automatic migration from legacy /src/assets/images/ to /images/
 const getItem = <T>(key: string, defaultValue: T): T => {
   try {
     const data = localStorage.getItem(key);
     if (!data) return defaultValue;
-    return JSON.parse(data) as T;
+    const cleaned = data.replace(/\/src\/assets\/images\//g, '/images/');
+    return JSON.parse(cleaned) as T;
   } catch (err) {
     console.error(`Error reading ${key}:`, err);
     return defaultValue;
@@ -50,7 +51,7 @@ export const StorageService = {
     setItem(STORAGE_KEYS.PRODUCTS, products);
   },
 
-  saveProduct: (product: Product): void => {
+  saveProduct: async (product: Product): Promise<void> => {
     const products = StorageService.getProducts();
     const index = products.findIndex((p) => p.id === product.id);
     if (index >= 0) {
@@ -60,26 +61,22 @@ export const StorageService = {
     }
     StorageService.saveProducts(products);
 
-    // Sync to Firebase Firestore
+    // Sync to Firebase Firestore live
     try {
-      setDoc(doc(db, 'products', product.id), product).catch((e) =>
-        console.warn('Firestore product sync warning:', e)
-      );
+      await setDoc(doc(db, 'products', product.id), product);
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore product sync error:', e);
     }
   },
 
-  deleteProduct: (id: string): void => {
+  deleteProduct: async (id: string): Promise<void> => {
     const products = StorageService.getProducts().filter((p) => p.id !== id);
     StorageService.saveProducts(products);
 
     try {
-      deleteDoc(doc(db, 'products', id)).catch((e) =>
-        console.warn('Firestore product delete warning:', e)
-      );
+      await deleteDoc(doc(db, 'products', id));
     } catch (e) {
-      console.warn('Firestore delete failed:', e);
+      console.warn('Firestore product delete error:', e);
     }
   },
 
@@ -92,7 +89,7 @@ export const StorageService = {
     setItem(STORAGE_KEYS.CATEGORIES, categories);
   },
 
-  saveCategory: (category: Category): void => {
+  saveCategory: async (category: Category): Promise<void> => {
     const categories = StorageService.getCategories();
     const index = categories.findIndex((c) => c.id === category.id);
     if (index >= 0) {
@@ -103,24 +100,20 @@ export const StorageService = {
     StorageService.saveCategories(categories);
 
     try {
-      setDoc(doc(db, 'categories', category.id), category).catch((e) =>
-        console.warn('Firestore category sync warning:', e)
-      );
+      await setDoc(doc(db, 'categories', category.id), category);
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore category sync error:', e);
     }
   },
 
-  deleteCategory: (id: string): void => {
+  deleteCategory: async (id: string): Promise<void> => {
     const categories = StorageService.getCategories().filter((c) => c.id !== id);
     StorageService.saveCategories(categories);
 
     try {
-      deleteDoc(doc(db, 'categories', id)).catch((e) =>
-        console.warn('Firestore category delete warning:', e)
-      );
+      await deleteDoc(doc(db, 'categories', id));
     } catch (e) {
-      console.warn('Firestore delete failed:', e);
+      console.warn('Firestore category delete error:', e);
     }
   },
 
@@ -137,7 +130,7 @@ export const StorageService = {
     );
   },
 
-  createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'statusHistory'>): Order => {
+  createOrder: async (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'statusHistory'>): Promise<Order> => {
     const orders = StorageService.getOrders();
     const nextNum = 1001 + orders.length;
     const now = new Date().toISOString();
@@ -170,19 +163,17 @@ export const StorageService = {
     });
     StorageService.saveProducts(products);
 
-    // Sync order to Firestore
+    // Sync order to Firestore live
     try {
-      setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((e) =>
-        console.warn('Firestore order sync warning:', e)
-      );
+      await setDoc(doc(db, 'orders', newOrder.id), newOrder);
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore order sync error:', e);
     }
 
     return newOrder;
   },
 
-  updateOrderStatus: (orderId: string, status: OrderStatus, note?: string, trackingNumber?: string, courierName?: string): Order | undefined => {
+  updateOrderStatus: async (orderId: string, status: OrderStatus, note?: string, trackingNumber?: string, courierName?: string): Promise<Order | undefined> => {
     const orders = StorageService.getOrders();
     const order = orders.find((o) => o.id === orderId);
     if (!order) return undefined;
@@ -201,26 +192,22 @@ export const StorageService = {
     setItem(STORAGE_KEYS.ORDERS, orders);
 
     try {
-      setDoc(doc(db, 'orders', order.id), order).catch((e) =>
-        console.warn('Firestore order status sync warning:', e)
-      );
+      await setDoc(doc(db, 'orders', order.id), order);
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore order status sync error:', e);
     }
 
     return order;
   },
 
-  deleteOrder: (orderId: string): void => {
+  deleteOrder: async (orderId: string): Promise<void> => {
     const orders = StorageService.getOrders().filter((o) => o.id !== orderId);
     setItem(STORAGE_KEYS.ORDERS, orders);
 
     try {
-      deleteDoc(doc(db, 'orders', orderId)).catch((e) =>
-        console.warn('Firestore order delete warning:', e)
-      );
+      await deleteDoc(doc(db, 'orders', orderId));
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore order delete error:', e);
     }
   },
 
@@ -234,30 +221,71 @@ export const StorageService = {
     return local;
   },
 
-  saveSettings: (settings: StoreSettings): void => {
+  saveSettings: async (settings: StoreSettings): Promise<void> => {
     setItem(STORAGE_KEYS.SETTINGS, settings);
     if (settings.adminPassword) {
       localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, settings.adminPassword);
     }
 
     try {
-      setDoc(doc(db, 'settings', 'general'), settings).catch((e) =>
-        console.warn('Firestore settings sync warning:', e)
-      );
+      await setDoc(doc(db, 'settings', 'general'), settings);
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore settings sync error:', e);
     }
   },
 
-  verifyAdminPassword: (password: string): boolean => {
+  getAdminPassword: (): string => {
     const settings = StorageService.getSettings();
-    return password.trim() === (settings.adminPassword || 'admin').trim();
+    const customPwd = localStorage.getItem(STORAGE_KEYS.ADMIN_PWD);
+    return customPwd || settings.adminPassword || 'admin';
   },
 
-  updateAdminPassword: (newPassword: string): void => {
+  verifyAdminPassword: (password: string): boolean => {
+    const current = StorageService.getAdminPassword();
+    return password.trim() === current.trim();
+  },
+
+  verifyAdminPasswordAsync: async (password: string): Promise<boolean> => {
+    // 1. Check local cache first
+    if (StorageService.verifyAdminPassword(password)) {
+      return true;
+    }
+    // 2. Fetch live settings from Firestore in case updated from another browser
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'general'));
+      if (snap.exists()) {
+        const liveSettings = snap.data() as StoreSettings;
+        if (liveSettings.adminPassword) {
+          localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, liveSettings.adminPassword);
+          const local = getItem<StoreSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+          local.adminPassword = liveSettings.adminPassword;
+          setItem(STORAGE_KEYS.SETTINGS, local);
+          return password.trim() === liveSettings.adminPassword.trim();
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore verify password lookup error:', err);
+    }
+    return false;
+  },
+
+  updateAdminPassword: async (newPassword: string): Promise<void> => {
+    const cleanPwd = newPassword.trim();
     const settings = StorageService.getSettings();
-    settings.adminPassword = newPassword.trim();
-    StorageService.saveSettings(settings);
+    settings.adminPassword = cleanPwd;
+    localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, cleanPwd);
+    setItem(STORAGE_KEYS.SETTINGS, settings);
+
+    // Save live directly to Firestore settings/general
+    try {
+      await setDoc(doc(db, 'settings', 'general'), {
+        ...settings,
+        adminPassword: cleanPwd,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Firestore admin password cloud save error:', e);
+    }
   },
 
   // Coupons
@@ -281,7 +309,7 @@ export const StorageService = {
     setItem(STORAGE_KEYS.COUPONS, coupons);
   },
 
-  saveCoupon: (coupon: Coupon): void => {
+  saveCoupon: async (coupon: Coupon): Promise<void> => {
     const coupons = StorageService.getCoupons();
     const index = coupons.findIndex((c) => c.id === coupon.id || c.code.toUpperCase() === coupon.code.toUpperCase());
     if (index >= 0) {
@@ -292,26 +320,22 @@ export const StorageService = {
     setItem(STORAGE_KEYS.COUPONS, coupons);
 
     try {
-      setDoc(doc(db, 'coupons', coupon.id || coupon.code), coupon).catch((e) =>
-        console.warn('Firestore coupon sync warning:', e)
-      );
+      await setDoc(doc(db, 'coupons', coupon.id || coupon.code), coupon);
     } catch (e) {
-      console.warn('Firestore sync failed:', e);
+      console.warn('Firestore coupon sync error:', e);
     }
   },
 
-  deleteCoupon: (idOrCode: string): void => {
+  deleteCoupon: async (idOrCode: string): Promise<void> => {
     const coupons = StorageService.getCoupons().filter(
       (c) => c.id !== idOrCode && c.code.toUpperCase() !== idOrCode.toUpperCase()
     );
     setItem(STORAGE_KEYS.COUPONS, coupons);
 
     try {
-      deleteDoc(doc(db, 'coupons', idOrCode)).catch((e) =>
-        console.warn('Firestore coupon delete warning:', e)
-      );
+      await deleteDoc(doc(db, 'coupons', idOrCode));
     } catch (e) {
-      console.warn('Firestore delete failed:', e);
+      console.warn('Firestore coupon delete error:', e);
     }
   },
 
@@ -341,5 +365,161 @@ export const StorageService = {
 
   saveCart: (cart: CartItem[]): void => {
     setItem(STORAGE_KEYS.CART, cart);
+  },
+
+  // FULL LIVE FIRESTORE CLOUD SYNC
+  syncAllFromFirestore: async (): Promise<{
+    settingsUpdated: boolean;
+    productsCount: number;
+    categoriesCount: number;
+    ordersCount: number;
+    couponsCount: number;
+  }> => {
+    let settingsUpdated = false;
+    let productsCount = 0;
+    let categoriesCount = 0;
+    let ordersCount = 0;
+    let couponsCount = 0;
+
+    try {
+      // 1. Settings
+      const settingsSnap = await getDoc(doc(db, 'settings', 'general'));
+      if (settingsSnap.exists()) {
+        const liveSettings = settingsSnap.data() as StoreSettings;
+        const current = StorageService.getSettings();
+        const merged = { ...current, ...liveSettings };
+        setItem(STORAGE_KEYS.SETTINGS, merged);
+        if (liveSettings.adminPassword) {
+          localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, liveSettings.adminPassword);
+        }
+        settingsUpdated = true;
+      } else {
+        // Seed initial settings to Firestore
+        const initSettings = StorageService.getSettings();
+        await setDoc(doc(db, 'settings', 'general'), initSettings);
+      }
+
+      // 2. Products
+      const prodSnap = await getDocs(collection(db, 'products'));
+      if (!prodSnap.empty) {
+        const liveProducts = prodSnap.docs.map((d) => d.data() as Product);
+        setItem(STORAGE_KEYS.PRODUCTS, liveProducts);
+        productsCount = liveProducts.length;
+      } else {
+        // Seed initial products to Firestore
+        const initProducts = StorageService.getProducts();
+        for (const p of initProducts) {
+          await setDoc(doc(db, 'products', p.id), p);
+        }
+        productsCount = initProducts.length;
+      }
+
+      // 3. Categories
+      const catSnap = await getDocs(collection(db, 'categories'));
+      if (!catSnap.empty) {
+        const liveCategories = catSnap.docs.map((d) => d.data() as Category);
+        setItem(STORAGE_KEYS.CATEGORIES, liveCategories);
+        categoriesCount = liveCategories.length;
+      } else {
+        const initCategories = StorageService.getCategories();
+        for (const c of initCategories) {
+          await setDoc(doc(db, 'categories', c.id), c);
+        }
+        categoriesCount = initCategories.length;
+      }
+
+      // 4. Orders
+      const ordSnap = await getDocs(collection(db, 'orders'));
+      if (!ordSnap.empty) {
+        const liveOrders = ordSnap.docs.map((d) => d.data() as Order);
+        setItem(STORAGE_KEYS.ORDERS, liveOrders);
+        ordersCount = liveOrders.length;
+      }
+
+      // 5. Coupons
+      const coupSnap = await getDocs(collection(db, 'coupons'));
+      if (!coupSnap.empty) {
+        const liveCoupons = coupSnap.docs.map((d) => d.data() as Coupon);
+        setItem(STORAGE_KEYS.COUPONS, liveCoupons);
+        couponsCount = liveCoupons.length;
+      }
+    } catch (err) {
+      console.warn('Error during syncAllFromFirestore:', err);
+    }
+
+    return {
+      settingsUpdated,
+      productsCount,
+      categoriesCount,
+      ordersCount,
+      couponsCount,
+    };
+  },
+
+  // Real-time Firestore Listeners
+  subscribeToLiveUpdates: (callbacks: {
+    onSettings?: (settings: StoreSettings) => void;
+    onProducts?: (products: Product[]) => void;
+    onCategories?: (categories: Category[]) => void;
+    onOrders?: (orders: Order[]) => void;
+  }): (() => void) => {
+    const unsubscribes: Unsubscribe[] = [];
+
+    try {
+      // Settings listener
+      const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (snap) => {
+        if (snap.exists()) {
+          const live = snap.data() as StoreSettings;
+          const current = StorageService.getSettings();
+          const merged = { ...current, ...live };
+          setItem(STORAGE_KEYS.SETTINGS, merged);
+          if (live.adminPassword) {
+            localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, live.adminPassword);
+          }
+          callbacks.onSettings?.(merged);
+        }
+      });
+      unsubscribes.push(unsubSettings);
+
+      // Products listener
+      const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
+        if (!snap.empty) {
+          const prods = snap.docs.map((d) => d.data() as Product);
+          setItem(STORAGE_KEYS.PRODUCTS, prods);
+          callbacks.onProducts?.(prods);
+        }
+      });
+      unsubscribes.push(unsubProducts);
+
+      // Categories listener
+      const unsubCategories = onSnapshot(collection(db, 'categories'), (snap) => {
+        if (!snap.empty) {
+          const cats = snap.docs.map((d) => d.data() as Category);
+          setItem(STORAGE_KEYS.CATEGORIES, cats);
+          callbacks.onCategories?.(cats);
+        }
+      });
+      unsubscribes.push(unsubCategories);
+
+      // Orders listener
+      const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+        if (!snap.empty) {
+          const ords = snap.docs.map((d) => d.data() as Order);
+          setItem(STORAGE_KEYS.ORDERS, ords);
+          callbacks.onOrders?.(ords);
+        }
+      });
+      unsubscribes.push(unsubOrders);
+    } catch (err) {
+      console.warn('Firestore live listener error:', err);
+    }
+
+    return () => {
+      unsubscribes.forEach((unsub) => {
+        try {
+          unsub();
+        } catch (_) {}
+      });
+    };
   },
 };

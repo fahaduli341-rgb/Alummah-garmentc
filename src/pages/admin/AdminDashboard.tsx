@@ -15,6 +15,7 @@ import {
   TrendingUp,
   CheckCircle,
   Eye,
+  EyeOff,
   LogOut,
   RefreshCw,
   ExternalLink,
@@ -80,7 +81,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
 
   // Banner & Stats Editor State (Supports changing hero pic and the numbers above it)
   const [bannerForm, setBannerForm] = useState({
-    heroImage: settings.heroImage || '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+    heroImage: settings.heroImage?.replace('/src/assets/images/', '/images/') || '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
     heroBadge: settings.heroBadge || 'ড্রপ-শোল্ডার এডিশন',
     heroTitle: settings.heroTitle || 'সবর (Sabr) ও তাওয়াক্কুল (Tawakkul) সিরিজ',
     heroMainHeading: settings.heroMainHeading || 'মার্জিত ইসলামিক ক্যালিগ্রাফি ও খাঁটি কটনের টি-শার্ট।',
@@ -93,9 +94,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
     stat3Label: settings.stat3Label || 'সাইজ এক্সচেঞ্জ সুবিধা',
   });
 
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(false);
+  const [showActivePwd, setShowActivePwd] = useState(false);
+
   useEffect(() => {
     setBannerForm({
-      heroImage: settings.heroImage || '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+      heroImage: settings.heroImage?.replace('/src/assets/images/', '/images/') || '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
       heroBadge: settings.heroBadge || 'ড্রপ-শোল্ডার এডিশন',
       heroTitle: settings.heroTitle || 'সবর (Sabr) ও তাওয়াক্কুল (Tawakkul) সিরিজ',
       heroMainHeading: settings.heroMainHeading || 'মার্জিত ইসলামিক ক্যালিগ্রাফি ও খাঁটি কটনের টি-শার্ট।',
@@ -134,19 +138,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   const PRESET_BANNER_IMAGES = [
     {
       name: 'ইসলামিক ড্রপ-শোল্ডার মডেল (অফিশিয়াল)',
-      url: '/src/assets/images/hero_islamic_tshirt_banner_1791712348157.jpg',
+      url: '/images/hero_islamic_tshirt_banner_1791712348157.jpg',
     },
     {
       name: 'সবর (Sabr) গোল্ড ক্যালিগ্রাফি টি-শার্ট',
-      url: '/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg',
+      url: '/images/tshirt_sabr_calligraphy_1791712281050.jpg',
     },
     {
       name: 'তাওয়াক্কুল (Tawakkul) অলিভ গ্রিন টি-শার্ট',
-      url: '/src/assets/images/tshirt_tawakkul_green_1791712291944.jpg',
+      url: '/images/tshirt_tawakkul_green_1791712291944.jpg',
     },
     {
       name: 'আল-উম্মাহ লাইট ক্রিম ওভারসাইজড',
-      url: '/src/assets/images/tshirt_al_ummah_cream_1791712303018.jpg',
+      url: '/images/tshirt_al_ummah_cream_1791712303018.jpg',
     },
   ];
 
@@ -164,15 +168,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
     runFirebaseTest();
   }, []);
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (StorageService.verifyAdminPassword(passwordInput)) {
-      setIsAuthenticated(true);
-      localStorage.setItem('alummah_admin_session', 'active');
-      setAuthError('');
-      showToast('অ্যাডমিন প্যানেলে স্বাগতম।');
-    } else {
-      setAuthError('ভুল পাসওয়ার্ড। দয়া করে সঠিক অ্যাডমিন পাসওয়ার্ড প্রদান করুন।');
+    setIsVerifyingAuth(true);
+    setAuthError('');
+    try {
+      const isValid = await StorageService.verifyAdminPasswordAsync(passwordInput);
+      if (isValid) {
+        setIsAuthenticated(true);
+        localStorage.setItem('alummah_admin_session', 'active');
+        setAuthError('');
+        showToast('অ্যাডমিন প্যানেলে স্বাগতম। ফায়ারবেস ক্লাউড সক্রিয়।');
+      } else {
+        setAuthError('ভুল পাসওয়ার্ড। দয়া করে সঠিক গোপন পাসওয়ার্ড লিখুন (প্রাথমিক ডিফল্ট পাসওয়ার্ড: admin)।');
+      }
+    } catch {
+      setAuthError('পাসওয়ার্ড যাচাইতে সমস্যা হয়েছে। দয়া করে পুনরায় চেষ্টা করুন।');
+    } finally {
+      setIsVerifyingAuth(false);
     }
   };
 
@@ -182,12 +195,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
     showToast('অ্যাডমিন প্যানেল থেকে সাইন আউট করা হয়েছে।', 'info');
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!StorageService.verifyAdminPassword(oldPassword)) {
-      showToast('বর্তমান পাসওয়ার্ড সঠিক নয়!', 'error');
-      return;
-    }
     if (newPassword.length < 4) {
       showToast('নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।', 'error');
       return;
@@ -197,11 +206,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
       return;
     }
 
-    StorageService.updateAdminPassword(newPassword);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    showToast('অ্যাডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে।');
+    try {
+      await StorageService.updateAdminPassword(newPassword);
+      updateSettings({
+        ...settings,
+        adminPassword: newPassword.trim(),
+      });
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast('অ্যাডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে এবং ফায়ারবেসে লাইভ সেভ হয়েছে!');
+    } catch (err) {
+      showToast('পাসওয়ার্ড সেভ করতে সমস্যা হয়েছে।', 'error');
+    }
   };
 
   const runFirebaseTest = async () => {
@@ -254,10 +271,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   const openProductModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setProductImages(product.images && product.images.length > 0 ? [...product.images] : ['/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg']);
+      setProductImages(product.images && product.images.length > 0 ? [...product.images] : ['/images/tshirt_sabr_calligraphy_1791712281050.jpg']);
     } else {
       setEditingProduct(null);
-      setProductImages(['/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg']);
+      setProductImages(['/images/tshirt_sabr_calligraphy_1791712281050.jpg']);
     }
     setNewImageUrl('');
     setIsProductModalOpen(true);
@@ -272,7 +289,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   const handleRemoveImageFromProduct = (indexToRemove: number) => {
     setProductImages((prev) => {
       const filtered = prev.filter((_, i) => i !== indexToRemove);
-      return filtered.length > 0 ? filtered : ['/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg'];
+      return filtered.length > 0 ? filtered : ['/images/tshirt_sabr_calligraphy_1791712281050.jpg'];
     });
   };
 
@@ -296,7 +313,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
 
     const finalImages = productImages.length > 0
       ? productImages
-      : ['/src/assets/images/tshirt_sabr_calligraphy_1791712281050.jpg'];
+      : ['/images/tshirt_sabr_calligraphy_1791712281050.jpg'];
 
     const productToSave: Product = {
       id: editingProduct?.id || `prod-ts-${Date.now()}`,
@@ -361,7 +378,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
       name: catData.name || 'নতুন ক্যাটাগরি',
       slug: (catData.slug || catData.name || 'category').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       description: catData.description || '',
-      image: catData.image || '/src/assets/images/category_calligraphy_tshirts_1791712297126.jpg',
+      image: catData.image || '/images/tshirt_sabr_calligraphy_1791712281050.jpg',
       productCount: editingCategory?.productCount || 0,
     };
     StorageService.saveCategory(catToSave);
@@ -389,8 +406,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   };
 
   // ORDERS STATUS
-  const handleOrderStatusChange = (orderId: string, newStatus: OrderStatus, trackingNo?: string, courier?: string) => {
-    const updated = StorageService.updateOrderStatus(orderId, newStatus, undefined, trackingNo, courier);
+  const handleOrderStatusChange = async (orderId: string, newStatus: OrderStatus, trackingNo?: string, courier?: string) => {
+    const updated = await StorageService.updateOrderStatus(orderId, newStatus, undefined, trackingNo, courier);
     if (updated) {
       setOrders(StorageService.getOrders());
       if (selectedOrder?.id === orderId) {
@@ -442,17 +459,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
 
             <button
               type="submit"
-              className="w-full py-3 bg-[#0C1F15] hover:bg-[#183a28] text-white font-semibold rounded-lg shadow-sm transition-colors text-xs"
+              disabled={isVerifyingAuth}
+              className="w-full py-3 bg-[#0C1F15] hover:bg-[#183a28] disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-colors text-xs flex items-center justify-center gap-2"
             >
-              ড্যাশবোর্ডে প্রবেশ করুন
+              {isVerifyingAuth ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                  <span>ক্লাউড ফায়ারবেসে যাচাই করা হচ্ছে...</span>
+                </>
+              ) : (
+                <span>ড্যাশবোর্ডে প্রবেশ করুন</span>
+              )}
             </button>
           </form>
 
-          <div className="pt-2 text-center">
+          <div className="pt-2 text-center space-y-2 border-t border-stone-100">
+            <p className="text-[11px] text-stone-400">
+              প্রাথমিক ডিফল্ট পাসওয়ার্ড: <span className="font-mono text-stone-600 font-bold">admin</span>
+            </p>
             <button
               type="button"
               onClick={onNavigateHome}
-              className="text-xs text-stone-500 hover:text-stone-800"
+              className="text-xs text-stone-500 hover:text-stone-800 block mx-auto"
             >
               ← স্টোরফ্রন্টে ফিরে যান
             </button>
@@ -1472,24 +1500,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
             <div className="flex items-center gap-2.5 border-b border-stone-100 pb-3">
               <KeyRound className="w-5 h-5 text-emerald-800" />
               <div>
-                <h2 className="font-serif text-lg font-bold text-stone-900">অ্যাডমিন পাসওয়ার্ড পরিবর্তন</h2>
-                <p className="text-xs text-stone-500">আপনার নিজস্ব গোপন পাসওয়ার্ড সেট করুন।</p>
+                <h2 className="font-serif text-lg font-bold text-stone-900">অ্যাডমিন পাসওয়ার্ড পরিবর্তন ও নিরাপত্তা</h2>
+                <p className="text-xs text-stone-500">আপনার নিজস্ব গোপন পাসওয়ার্ড সেট করুন। এটি ফায়ারবেস ক্লাউডে সরাসরি সেভ হয়।</p>
               </div>
             </div>
 
-            <form onSubmit={handleChangePassword} className="space-y-4 text-xs">
+            {/* Current Active Password Card */}
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
               <div>
-                <label className="font-medium text-stone-700 block mb-1">বর্তমান পাসওয়ার্ড</label>
-                <input
-                  type="password"
-                  required
-                  value={oldPassword}
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="বর্তমান পাসওয়ার্ড লিখুন"
-                  className="w-full p-2.5 border border-stone-300 rounded"
-                />
+                <span className="text-[11px] font-semibold text-emerald-950 uppercase tracking-wider block">
+                  বর্তমানে সক্রিয় ক্লাউড পাসওয়ার্ড:
+                </span>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="font-mono text-base font-bold text-stone-900 bg-white px-2.5 py-0.5 rounded border border-emerald-200">
+                    {showActivePwd ? StorageService.getAdminPassword() : '••••••••'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowActivePwd(!showActivePwd)}
+                    className="p-1.5 hover:bg-emerald-100 rounded text-emerald-800 transition-colors flex items-center gap-1 text-xs font-semibold"
+                    title={showActivePwd ? 'লুকান' : 'পাসওয়ার্ড দেখুন'}
+                  >
+                    {showActivePwd ? (
+                      <>
+                        <EyeOff className="w-4 h-4" />
+                        <span>লুকান</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4" />
+                        <span>পাসওয়ার্ড দেখুন</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
+              <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded border border-emerald-300">
+                Firestore Live
+              </span>
+            </div>
 
+            <form onSubmit={handleChangePassword} className="space-y-4 text-xs pt-2">
               <div>
                 <label className="font-medium text-stone-700 block mb-1">নতুন পাসওয়ার্ড</label>
                 <input
@@ -1497,8 +1548,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="নতুন গোপন পাসওয়ার্ড লিখুন"
-                  className="w-full p-2.5 border border-stone-300 rounded"
+                  placeholder="নতুন গোপন পাসওয়ার্ড লিখুন (কমপক্ষে ৪ অক্ষর)"
+                  className="w-full p-2.5 border border-stone-300 rounded focus:ring-1 focus:ring-stone-900"
                 />
               </div>
 
@@ -1510,15 +1561,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="নতুন পাসওয়ার্ড পুনরায় লিখুন"
-                  className="w-full p-2.5 border border-stone-300 rounded"
+                  className="w-full p-2.5 border border-stone-300 rounded focus:ring-1 focus:ring-stone-900"
                 />
+              </div>
+
+              <div className="p-3 bg-stone-50 rounded-lg text-stone-600 text-[11px] leading-relaxed">
+                পাসওয়ার্ড পরিবর্তন করার সাথে সাথে তা আপনার ফায়ারবেস ক্লাউড ডাটাবেসে আপডেট হয়ে যাবে এবং পরবর্তীতে এই পাসওয়ার্ড দিয়েই লগইন করতে পারবেন।
               </div>
 
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-stone-900 text-white font-semibold rounded hover:bg-stone-800 transition-colors"
+                className="px-6 py-2.5 bg-stone-900 text-white font-semibold rounded hover:bg-stone-800 transition-colors flex items-center gap-2"
               >
-                পাসওয়ার্ড পরিবর্তন করুন
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span>নতুন পাসওয়ার্ড লাইভ সেট করুন</span>
               </button>
             </form>
           </div>
@@ -1887,7 +1943,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
                 <input
                   name="image"
                   required
-                  defaultValue={editingCategory?.image || '/src/assets/images/category_calligraphy_tshirts_1791712297126.jpg'}
+                  defaultValue={editingCategory?.image || '/images/tshirt_sabr_calligraphy_1791712281050.jpg'}
                   className="w-full p-2 border border-stone-300 rounded font-mono text-[11px]"
                 />
               </div>

@@ -50,6 +50,27 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     StorageService.saveCart(cart);
   }, [cart]);
 
+  // Sync and listen to live Firestore cloud updates
+  useEffect(() => {
+    // Initial fetch from cloud
+    StorageService.syncAllFromFirestore().then((res) => {
+      if (res.settingsUpdated) {
+        setSettings(StorageService.getSettings());
+      }
+    });
+
+    // Real-time listener for settings changes (banner, stats, address, adminPassword, etc.)
+    const unsubscribe = StorageService.subscribeToLiveUpdates({
+      onSettings: (liveSettings) => {
+        setSettings(liveSettings);
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
