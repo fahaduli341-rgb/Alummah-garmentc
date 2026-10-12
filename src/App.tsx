@@ -46,10 +46,15 @@ function StoreApp() {
   };
 
   useEffect(() => {
-    setProducts(StorageService.getProducts());
-    setCategories(StorageService.getCategories());
+    // 1. Initial immediate live fetch from Firestore cloud
+    StorageService.fetchLiveProductsFromFirestore().then((live) => {
+      if (live) setProducts(live);
+    });
+    StorageService.fetchLiveCategoriesFromFirestore().then((live) => {
+      if (live) setCategories(live);
+    });
 
-    // Subscribe to live Firestore updates
+    // 2. Real-time live listener for Firestore cloud changes
     const unsubscribe = StorageService.subscribeToLiveUpdates({
       onProducts: (liveProducts) => {
         setProducts(liveProducts);
@@ -62,7 +67,7 @@ function StoreApp() {
     return () => {
       unsubscribe();
     };
-  }, [currentPath]);
+  }, []);
 
   // Admin View
   if (currentPath === '/admin') {

@@ -15,7 +15,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   isCodEnabled: true,
   isBkashEnabled: true,
   isNagadEnabled: true,
-  adminPassword: 'admin',
+  adminPassword: 'fahad@12#',
 
   // Hero Banner Picture & Titles
   heroImage: '/images/hero_islamic_tshirt_banner_1791712348157.jpg',

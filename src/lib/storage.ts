@@ -12,11 +12,23 @@ const STORAGE_KEYS = {
   CART: 'alummah_tshirts_cart',
   WISHLIST: 'alummah_tshirts_wishlist',
   ADMIN_PWD: 'alummah_admin_custom_pwd',
+  INITIAL_SEEDED: 'alummah_firebase_seeded_v1',
+};
+
+// Clean object recursively to ensure ZERO undefined properties reach Firestore
+export const cleanForFirestore = <T>(obj: T): T => {
+  return JSON.parse(
+    JSON.stringify(obj, (_, value) => {
+      if (value === undefined) return null;
+      return value;
+    })
+  );
 };
 
 // Safe storage reader with automatic migration from legacy /src/assets/images/ to /images/
 const getItem = <T>(key: string, defaultValue: T): T => {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return defaultValue;
     const data = localStorage.getItem(key);
     if (!data) return defaultValue;
     const cleaned = data.replace(/\/src\/assets\/images\//g, '/images/');
@@ -30,6 +42,7 @@ const getItem = <T>(key: string, defaultValue: T): T => {
 // Safe storage writer
 const setItem = <T>(key: string, value: T): void => {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
     console.error(`Error saving ${key}:`, err);
@@ -63,9 +76,9 @@ export const StorageService = {
 
     // Sync to Firebase Firestore live
     try {
-      await setDoc(doc(db, 'products', product.id), product);
+      await setDoc(doc(db, 'products', product.id), cleanForFirestore(product));
     } catch (e) {
-      console.warn('Firestore product sync error:', e);
+      console.error('Firestore product sync error:', e);
     }
   },
 
@@ -76,8 +89,22 @@ export const StorageService = {
     try {
       await deleteDoc(doc(db, 'products', id));
     } catch (e) {
-      console.warn('Firestore product delete error:', e);
+      console.error('Firestore product delete error:', e);
     }
+  },
+
+  fetchLiveProductsFromFirestore: async (): Promise<Product[]> => {
+    try {
+      const snap = await getDocs(collection(db, 'products'));
+      if (!snap.empty) {
+        const liveProducts = snap.docs.map((d) => d.data() as Product);
+        StorageService.saveProducts(liveProducts);
+        return liveProducts;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch live products from Firestore:', err);
+    }
+    return StorageService.getProducts();
   },
 
   // Categories
@@ -100,9 +127,9 @@ export const StorageService = {
     StorageService.saveCategories(categories);
 
     try {
-      await setDoc(doc(db, 'categories', category.id), category);
+      await setDoc(doc(db, 'categories', category.id), cleanForFirestore(category));
     } catch (e) {
-      console.warn('Firestore category sync error:', e);
+      console.error('Firestore category sync error:', e);
     }
   },
 
@@ -113,8 +140,22 @@ export const StorageService = {
     try {
       await deleteDoc(doc(db, 'categories', id));
     } catch (e) {
-      console.warn('Firestore category delete error:', e);
+      console.error('Firestore category delete error:', e);
     }
+  },
+
+  fetchLiveCategoriesFromFirestore: async (): Promise<Category[]> => {
+    try {
+      const snap = await getDocs(collection(db, 'categories'));
+      if (!snap.empty) {
+        const liveCategories = snap.docs.map((d) => d.data() as Category);
+        StorageService.saveCategories(liveCategories);
+        return liveCategories;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch live categories from Firestore:', err);
+    }
+    return StorageService.getCategories();
   },
 
   // Orders
@@ -131,49 +172,63 @@ export const StorageService = {
   },
 
   createOrder: async (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'statusHistory'>): Promise<Order> => {
-    const orders = StorageService.getOrders();
-    const nextNum = 1001 + orders.length;
-    const now = new Date().toISOString();
+    // Generate a unique order sequence using timestamp to prevent duplicate collisions across users
+    const now = new Date();
+    const timestamp = Date.now().toString().slice(-4);
+    const orderNumber = `AUG-${timestamp}`;
+    const nowIso = now.toISOString();
 
     const newOrder: Order = {
       ...orderData,
-      id: `ord-${nextNum}`,
-      orderNumber: `AUG-${nextNum}`,
-      createdAt: now,
+      id: `ord-${Date.now()}`,
+      orderNumber,
+      createdAt: nowIso,
       statusHistory: [
         {
           status: 'pending',
-          timestamp: now,
+          timestamp: nowIso,
           note: `অর্ডার গ্রহণ করা হয়েছে (${orderData.paymentMethod.toUpperCase()})।`,
         },
       ],
     };
 
+    // Save to local storage
+    const orders = StorageService.getOrders();
     orders.unshift(newOrder);
     setItem(STORAGE_KEYS.ORDERS, orders);
 
-    // Stock deduction
+    // Stock deduction locally and in Firestore
     const products = StorageService.getProducts();
-    newOrder.items.forEach((item) => {
+    for (const item of newOrder.items) {
       const prod = products.find((p) => p.id === item.productId);
       if (prod) {
         prod.stock = Math.max(0, prod.stock - item.quantity);
         prod.inStock = prod.stock > 0;
+        try {
+          await setDoc(doc(db, 'products', prod.id), cleanForFirestore(prod));
+        } catch (_) {}
       }
-    });
+    }
     StorageService.saveProducts(products);
 
-    // Sync order to Firestore live
+    // Sync order to Firestore live with clean object (no undefined)
     try {
-      await setDoc(doc(db, 'orders', newOrder.id), newOrder);
+      await setDoc(doc(db, 'orders', newOrder.id), cleanForFirestore(newOrder));
+      console.log('Order successfully synced to Firestore cloud:', newOrder.id);
     } catch (e) {
-      console.warn('Firestore order sync error:', e);
+      console.error('CRITICAL: Firestore order sync error:', e);
     }
 
     return newOrder;
   },
 
-  updateOrderStatus: async (orderId: string, status: OrderStatus, note?: string, trackingNumber?: string, courierName?: string): Promise<Order | undefined> => {
+  updateOrderStatus: async (
+    orderId: string,
+    status: OrderStatus,
+    note?: string,
+    trackingNumber?: string,
+    courierName?: string
+  ): Promise<Order | undefined> => {
     const orders = StorageService.getOrders();
     const order = orders.find((o) => o.id === orderId);
     if (!order) return undefined;
@@ -192,9 +247,9 @@ export const StorageService = {
     setItem(STORAGE_KEYS.ORDERS, orders);
 
     try {
-      await setDoc(doc(db, 'orders', order.id), order);
+      await setDoc(doc(db, 'orders', order.id), cleanForFirestore(order));
     } catch (e) {
-      console.warn('Firestore order status sync error:', e);
+      console.error('Firestore order status sync error:', e);
     }
 
     return order;
@@ -207,8 +262,22 @@ export const StorageService = {
     try {
       await deleteDoc(doc(db, 'orders', orderId));
     } catch (e) {
-      console.warn('Firestore order delete error:', e);
+      console.error('Firestore order delete error:', e);
     }
+  },
+
+  fetchLiveOrdersFromFirestore: async (): Promise<Order[]> => {
+    try {
+      const snap = await getDocs(collection(db, 'orders'));
+      const liveOrders = snap.docs.map((d) => d.data() as Order);
+      // Sort newest first
+      liveOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setItem(STORAGE_KEYS.ORDERS, liveOrders);
+      return liveOrders;
+    } catch (err) {
+      console.warn('Failed to fetch live orders from Firestore:', err);
+    }
+    return StorageService.getOrders();
   },
 
   // Settings
@@ -228,29 +297,30 @@ export const StorageService = {
     }
 
     try {
-      await setDoc(doc(db, 'settings', 'general'), settings);
+      await setDoc(doc(db, 'settings', 'general'), cleanForFirestore(settings));
     } catch (e) {
-      console.warn('Firestore settings sync error:', e);
+      console.error('Firestore settings sync error:', e);
     }
   },
 
   getAdminPassword: (): string => {
-    const settings = StorageService.getSettings();
     const customPwd = localStorage.getItem(STORAGE_KEYS.ADMIN_PWD);
-    return customPwd || settings.adminPassword || 'admin';
+    if (customPwd) return customPwd;
+    const settings = StorageService.getSettings();
+    return settings.adminPassword || '';
   },
 
   verifyAdminPassword: (password: string): boolean => {
     const current = StorageService.getAdminPassword();
+    if (!current) return false;
     return password.trim() === current.trim();
   },
 
   verifyAdminPasswordAsync: async (password: string): Promise<boolean> => {
-    // 1. Check local cache first
-    if (StorageService.verifyAdminPassword(password)) {
-      return true;
-    }
-    // 2. Fetch live settings from Firestore in case updated from another browser
+    const cleanInput = password.trim();
+    if (!cleanInput) return false;
+
+    // 1. Fetch live settings directly from Firestore settings/general
     try {
       const snap = await getDoc(doc(db, 'settings', 'general'));
       if (snap.exists()) {
@@ -260,12 +330,23 @@ export const StorageService = {
           const local = getItem<StoreSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
           local.adminPassword = liveSettings.adminPassword;
           setItem(STORAGE_KEYS.SETTINGS, local);
-          return password.trim() === liveSettings.adminPassword.trim();
+          return cleanInput === liveSettings.adminPassword.trim();
         }
       }
     } catch (err) {
       console.warn('Firestore verify password lookup error:', err);
     }
+
+    // 2. Check local admin password if offline
+    const customPwd = localStorage.getItem(STORAGE_KEYS.ADMIN_PWD);
+    if (customPwd) {
+      return cleanInput === customPwd.trim();
+    }
+    const currentSettings = StorageService.getSettings();
+    if (currentSettings.adminPassword) {
+      return cleanInput === currentSettings.adminPassword.trim();
+    }
+
     return false;
   },
 
@@ -278,13 +359,13 @@ export const StorageService = {
 
     // Save live directly to Firestore settings/general
     try {
-      await setDoc(doc(db, 'settings', 'general'), {
+      await setDoc(doc(db, 'settings', 'general'), cleanForFirestore({
         ...settings,
         adminPassword: cleanPwd,
         updatedAt: new Date().toISOString(),
-      });
+      }));
     } catch (e) {
-      console.warn('Firestore admin password cloud save error:', e);
+      console.error('Firestore admin password cloud save error:', e);
     }
   },
 
@@ -320,9 +401,9 @@ export const StorageService = {
     setItem(STORAGE_KEYS.COUPONS, coupons);
 
     try {
-      await setDoc(doc(db, 'coupons', coupon.id || coupon.code), coupon);
+      await setDoc(doc(db, 'coupons', coupon.id || coupon.code), cleanForFirestore(coupon));
     } catch (e) {
-      console.warn('Firestore coupon sync error:', e);
+      console.error('Firestore coupon sync error:', e);
     }
   },
 
@@ -335,8 +416,22 @@ export const StorageService = {
     try {
       await deleteDoc(doc(db, 'coupons', idOrCode));
     } catch (e) {
-      console.warn('Firestore coupon delete error:', e);
+      console.error('Firestore coupon delete error:', e);
     }
+  },
+
+  fetchLiveCouponsFromFirestore: async (): Promise<Coupon[]> => {
+    try {
+      const snap = await getDocs(collection(db, 'coupons'));
+      if (!snap.empty) {
+        const liveCoupons = snap.docs.map((d) => d.data() as Coupon);
+        setItem(STORAGE_KEYS.COUPONS, liveCoupons);
+        return liveCoupons;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch live coupons from Firestore:', err);
+    }
+    return StorageService.getCoupons();
   },
 
   // Wishlist
@@ -393,10 +488,6 @@ export const StorageService = {
           localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, liveSettings.adminPassword);
         }
         settingsUpdated = true;
-      } else {
-        // Seed initial settings to Firestore
-        const initSettings = StorageService.getSettings();
-        await setDoc(doc(db, 'settings', 'general'), initSettings);
       }
 
       // 2. Products
@@ -405,13 +496,6 @@ export const StorageService = {
         const liveProducts = prodSnap.docs.map((d) => d.data() as Product);
         setItem(STORAGE_KEYS.PRODUCTS, liveProducts);
         productsCount = liveProducts.length;
-      } else {
-        // Seed initial products to Firestore
-        const initProducts = StorageService.getProducts();
-        for (const p of initProducts) {
-          await setDoc(doc(db, 'products', p.id), p);
-        }
-        productsCount = initProducts.length;
       }
 
       // 3. Categories
@@ -420,18 +504,13 @@ export const StorageService = {
         const liveCategories = catSnap.docs.map((d) => d.data() as Category);
         setItem(STORAGE_KEYS.CATEGORIES, liveCategories);
         categoriesCount = liveCategories.length;
-      } else {
-        const initCategories = StorageService.getCategories();
-        for (const c of initCategories) {
-          await setDoc(doc(db, 'categories', c.id), c);
-        }
-        categoriesCount = initCategories.length;
       }
 
       // 4. Orders
       const ordSnap = await getDocs(collection(db, 'orders'));
       if (!ordSnap.empty) {
         const liveOrders = ordSnap.docs.map((d) => d.data() as Order);
+        liveOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setItem(STORAGE_KEYS.ORDERS, liveOrders);
         ordersCount = liveOrders.length;
       }
@@ -456,60 +535,75 @@ export const StorageService = {
     };
   },
 
-  // Real-time Firestore Listeners
+  // Real-time Firestore Listeners - captures ALL changes, additions, deletions, order placements
   subscribeToLiveUpdates: (callbacks: {
     onSettings?: (settings: StoreSettings) => void;
     onProducts?: (products: Product[]) => void;
     onCategories?: (categories: Category[]) => void;
     onOrders?: (orders: Order[]) => void;
+    onCoupons?: (coupons: Coupon[]) => void;
   }): (() => void) => {
     const unsubscribes: Unsubscribe[] = [];
 
     try {
       // Settings listener
-      const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (snap) => {
-        if (snap.exists()) {
-          const live = snap.data() as StoreSettings;
-          const current = StorageService.getSettings();
-          const merged = { ...current, ...live };
-          setItem(STORAGE_KEYS.SETTINGS, merged);
-          if (live.adminPassword) {
-            localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, live.adminPassword);
+      if (callbacks.onSettings) {
+        const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (snap) => {
+          if (snap.exists()) {
+            const live = snap.data() as StoreSettings;
+            const current = StorageService.getSettings();
+            const merged = { ...current, ...live };
+            setItem(STORAGE_KEYS.SETTINGS, merged);
+            if (live.adminPassword) {
+              localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, live.adminPassword);
+            }
+            callbacks.onSettings?.(merged);
           }
-          callbacks.onSettings?.(merged);
-        }
-      });
-      unsubscribes.push(unsubSettings);
+        });
+        unsubscribes.push(unsubSettings);
+      }
 
-      // Products listener
-      const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
-        if (!snap.empty) {
+      // Products listener - emits array even if empty (e.g. after deletion)
+      if (callbacks.onProducts) {
+        const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
           const prods = snap.docs.map((d) => d.data() as Product);
+          // Only update if collection was read (even if empty)
           setItem(STORAGE_KEYS.PRODUCTS, prods);
           callbacks.onProducts?.(prods);
-        }
-      });
-      unsubscribes.push(unsubProducts);
+        });
+        unsubscribes.push(unsubProducts);
+      }
 
       // Categories listener
-      const unsubCategories = onSnapshot(collection(db, 'categories'), (snap) => {
-        if (!snap.empty) {
+      if (callbacks.onCategories) {
+        const unsubCategories = onSnapshot(collection(db, 'categories'), (snap) => {
           const cats = snap.docs.map((d) => d.data() as Category);
           setItem(STORAGE_KEYS.CATEGORIES, cats);
           callbacks.onCategories?.(cats);
-        }
-      });
-      unsubscribes.push(unsubCategories);
+        });
+        unsubscribes.push(unsubCategories);
+      }
 
-      // Orders listener
-      const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-        if (!snap.empty) {
+      // Orders listener - emits all orders live in real time
+      if (callbacks.onOrders) {
+        const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
           const ords = snap.docs.map((d) => d.data() as Order);
+          ords.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
           setItem(STORAGE_KEYS.ORDERS, ords);
           callbacks.onOrders?.(ords);
-        }
-      });
-      unsubscribes.push(unsubOrders);
+        });
+        unsubscribes.push(unsubOrders);
+      }
+
+      // Coupons listener
+      if (callbacks.onCoupons) {
+        const unsubCoupons = onSnapshot(collection(db, 'coupons'), (snap) => {
+          const coups = snap.docs.map((d) => d.data() as Coupon);
+          setItem(STORAGE_KEYS.COUPONS, coups);
+          callbacks.onCoupons?.(coups);
+        });
+        unsubscribes.push(unsubCoupons);
+      }
     } catch (err) {
       console.warn('Firestore live listener error:', err);
     }

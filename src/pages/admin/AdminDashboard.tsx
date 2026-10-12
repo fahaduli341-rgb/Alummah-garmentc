@@ -166,6 +166,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
 
   useEffect(() => {
     runFirebaseTest();
+
+    // 1. Live sync data immediately from Firestore so admin immediately sees newly placed orders, products, etc.
+    StorageService.fetchLiveOrdersFromFirestore().then((live) => {
+      if (live) setOrders(live);
+    });
+    StorageService.fetchLiveProductsFromFirestore().then((live) => {
+      if (live) setProducts(live);
+    });
+    StorageService.fetchLiveCategoriesFromFirestore().then((live) => {
+      if (live) setCategories(live);
+    });
+    StorageService.fetchLiveCouponsFromFirestore().then((live) => {
+      if (live) setCoupons(live);
+    });
+
+    // 2. Real-time live listener for Firestore cloud changes (immediate updates on new orders or changes)
+    const unsubscribe = StorageService.subscribeToLiveUpdates({
+      onOrders: (liveOrders) => {
+        setOrders(liveOrders);
+      },
+      onProducts: (liveProducts) => {
+        setProducts(liveProducts);
+      },
+      onCategories: (liveCategories) => {
+        setCategories(liveCategories);
+      },
+      onCoupons: (liveCoupons) => {
+        setCoupons(liveCoupons);
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -179,8 +213,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
         localStorage.setItem('alummah_admin_session', 'active');
         setAuthError('');
         showToast('অ্যাডমিন প্যানেলে স্বাগতম। ফায়ারবেস ক্লাউড সক্রিয়।');
+        // Fetch fresh orders immediately on login
+        StorageService.fetchLiveOrdersFromFirestore().then((live) => {
+          if (live) setOrders(live);
+        });
       } else {
-        setAuthError('ভুল পাসওয়ার্ড। দয়া করে সঠিক গোপন পাসওয়ার্ড লিখুন (প্রাথমিক ডিফল্ট পাসওয়ার্ড: admin)।');
+        setAuthError('ভুল পাসওয়ার্ড। দয়া করে আপনার সঠিক গোপন পাসওয়ার্ড লিখুন।');
       }
     } catch {
       setAuthError('পাসওয়ার্ড যাচাইতে সমস্যা হয়েছে। দয়া করে পুনরায় চেষ্টা করুন।');
@@ -239,27 +277,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   const pendingOrdersCount = orders.filter((o) => o.status === 'pending').length;
   const lowStockProducts = products.filter((p) => p.stock <= 10);
 
-  // EXECUTE DELETE HANDLER
-  const confirmExecuteDelete = () => {
+  // EXECUTE DELETE HANDLER (Full async Firestore sync)
+  const confirmExecuteDelete = async () => {
     if (!deleteTarget) return;
 
     if (deleteTarget.type === 'product') {
-      StorageService.deleteProduct(deleteTarget.id);
+      await StorageService.deleteProduct(deleteTarget.id);
       setProducts(StorageService.getProducts());
       showToast(`টি-শার্ট "${deleteTarget.title}" সফলভাবে ডিলিট করা হয়েছে।`);
     } else if (deleteTarget.type === 'order') {
-      StorageService.deleteOrder(deleteTarget.id);
+      await StorageService.deleteOrder(deleteTarget.id);
       setOrders(StorageService.getOrders());
       if (selectedOrder?.id === deleteTarget.id) {
         setSelectedOrder(null);
       }
       showToast(`অর্ডার "${deleteTarget.title}" মুছে ফেলা হয়েছে।`);
     } else if (deleteTarget.type === 'category') {
-      StorageService.deleteCategory(deleteTarget.id);
+      await StorageService.deleteCategory(deleteTarget.id);
       setCategories(StorageService.getCategories());
       showToast(`ক্যাটাগরি "${deleteTarget.title}" ডিলিট করা হয়েছে।`);
     } else if (deleteTarget.type === 'coupon') {
-      StorageService.deleteCoupon(deleteTarget.id);
+      await StorageService.deleteCoupon(deleteTarget.id);
       setCoupons(StorageService.getCoupons());
       showToast(`কুপন "${deleteTarget.title}" ডিলিট করা হয়েছে।`);
     }
@@ -307,7 +345,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   };
 
   // PRODUCTS CRUD
-  const handleSaveProduct = (productData: Partial<Product>) => {
+  const handleSaveProduct = async (productData: Partial<Product>) => {
     const isNew = !editingProduct;
     const now = new Date().toISOString();
 
@@ -345,19 +383,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
       createdAt: editingProduct?.createdAt || now,
     };
 
-    StorageService.saveProduct(productToSave);
+    await StorageService.saveProduct(productToSave);
     setProducts(StorageService.getProducts());
     setIsProductModalOpen(false);
     setEditingProduct(null);
     showToast(`টি-শার্ট "${productToSave.name}" ${isNew ? 'যোগ' : 'আপডেট'} করা হয়েছে।`);
   };
 
-  const handleUpdateStock = (productId: string, delta: number) => {
+  const handleUpdateStock = async (productId: string, delta: number) => {
     const prod = products.find((p) => p.id === productId);
     if (!prod) return;
     const newStock = Math.max(0, prod.stock + delta);
     const updated = { ...prod, stock: newStock, inStock: newStock > 0 };
-    StorageService.saveProduct(updated);
+    await StorageService.saveProduct(updated);
     setProducts(StorageService.getProducts());
   };
 
@@ -371,7 +409,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
     setIsCategoryModalOpen(true);
   };
 
-  const handleSaveCategory = (catData: Partial<Category>) => {
+  const handleSaveCategory = async (catData: Partial<Category>) => {
     const isNew = !editingCategory;
     const catToSave: Category = {
       id: editingCategory?.id || `cat-${Date.now()}`,
@@ -381,7 +419,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
       image: catData.image || '/images/tshirt_sabr_calligraphy_1791712281050.jpg',
       productCount: editingCategory?.productCount || 0,
     };
-    StorageService.saveCategory(catToSave);
+    await StorageService.saveCategory(catToSave);
     setCategories(StorageService.getCategories());
     setIsCategoryModalOpen(false);
     setEditingCategory(null);
@@ -389,7 +427,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
   };
 
   // COUPONS CRUD
-  const handleSaveCoupon = (couponData: Partial<Coupon>) => {
+  const handleSaveCoupon = async (couponData: Partial<Coupon>) => {
     if (!couponData.code) return;
     const newCoupon: Coupon = {
       id: `cpn-${Date.now()}`,
@@ -399,7 +437,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
       isActive: true,
       description: couponData.description || '',
     };
-    StorageService.saveCoupon(newCoupon);
+    await StorageService.saveCoupon(newCoupon);
     setCoupons(StorageService.getCoupons());
     setIsCouponModalOpen(false);
     showToast(`কুপন "${newCoupon.code}" সফলভাবে সেভ হয়েছে।`);
@@ -474,9 +512,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateHome }
           </form>
 
           <div className="pt-2 text-center space-y-2 border-t border-stone-100">
-            <p className="text-[11px] text-stone-400">
-              প্রাথমিক ডিফল্ট পাসওয়ার্ড: <span className="font-mono text-stone-600 font-bold">admin</span>
-            </p>
             <button
               type="button"
               onClick={onNavigateHome}
